@@ -7,14 +7,17 @@ Versão 1.0
 """
 
 #Importa bibliotecas
+import sys
 import socket
+import traceback
 import threading
+import numpy as np
 
 class TCP_protocol(threading.Thread):
-    def __init__(self, TCP_IP, port, buffer=1024):
+    def __init__(self, TCP_IP='10.128.44.7', port=10001, buffer=1024):
         threading.Thread.__init__(self)
         self.buffer_size = buffer
-        self.port = int(port)
+        self.port = int(port)       #port default = 10001
         self.tcpip = str(TCP_IP)
         self.start()
             
@@ -39,13 +42,21 @@ class TCP_protocol(threading.Thread):
         self.MWIR =     'MWIR:'     #Perform a ramp to the given current setpoint
         self.MSRI =     'MSRI:'     #Change the value of the current ramp slew-rate
 
+        #special features - firmware 1.5.17
+        self.UP_WF =        'UPMODE:WAVEFORM\r'     #Command used to set the power module in analog control.
+        self.KEEP_ST =      'WAVE:KEEP_START\r'     #Command used to start the waveform generation when the module is in TRIGGER mode.
+        self.N_PERIODS =    'WAVE:N_PERIODS:'       #Command is used to set the number of periods the waveform needs to be reproduced. By setting "0", the waveform is reproduced with an infinite number of periods.
+        self.WF_POINTS =    'WAVE:POINTS:'          #Command is used to store the waveform points into the module. Min 100, Max 500000. Resolution, point by point, 10 us.
+        self.WF_START =     'WAVE:START\r'          #Command is used to start the waveform generation when the module is NOT in trigger mode.
+        self.WF_STOP =      'WAVE:STOP\r'           #Command is used to stop the wafeform generation.
+
     def Conectar(self):
         try:
             self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.s.connect((self.tcpip, self.port))
             return True
-        except:
-            return False
+        except Exception:
+                traceback.print_exc(file=sys.stdout)
 
     def Enviar(self,msg):            
         self.s.send(msg.encode('utf-8'))
@@ -116,6 +127,21 @@ class TCP_protocol(threading.Thread):
         self.const_volt = True
         return self.check_reply()
 
+    def damped_sinusoidal(self, amp, offset=0, freq, ncycle, theta=0, tau):
+        
+        sen = lambda t: (amp*np.sin(2*np.pi*freq*t + theta/360*2*np.pi) *
+                                 np.exp(-t/tau) + offset)
+        self.x = np.linspace(0, ncycle/freq, 100000)
+        self.y = sen(self.x)
+
+        pontos = np.array2string(self.y, precision=2, separator=',')
+        pontos = pontos.strip("[]")
+        self.waveform_gen(pontos)
+        
+    def waveform_gen(self, pts):
+        self.Enviar(self.WF_POINTS+str(pts)+'\r')
+        return self.check_reply()
+    
     def check_reply(self):
         value = self.data_recv()    
         if value[1] == 'A':
@@ -169,4 +195,4 @@ class TCP_protocol(threading.Thread):
         elif val == 99:
             return 'Setpoint is out of software limits'        
         else:
-            return 'Erro Nao Identificado'
+            return 'Unknown error'
