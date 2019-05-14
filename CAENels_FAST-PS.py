@@ -17,7 +17,7 @@ class TCP_protocol(threading.Thread):
     def __init__(self, TCP_IP='10.128.44.7', port=10001, buffer=1024):
         threading.Thread.__init__(self)
         self.buffer_size = buffer
-        self.port = int(port)                       #port default = 10001
+        self.port = int(port)                       #Port default = 10001
         self.tcpip = str(TCP_IP)
         self.error_list()
         self.start()
@@ -144,6 +144,22 @@ class TCP_protocol(threading.Thread):
     def damped_sinusoidal(self, amp, offset, freq, ncycle, theta, tau):
         sen = lambda t: (amp*np.sin(2*np.pi*freq*t + theta/360*2*np.pi) *
                                  np.exp(-t/tau) + offset)
+        totalPoints = int(ncycle * 100000 / freq)
+        self.x = np.linspace(0, ncycle/freq, totalPoints)
+        self.y = sen(self.x)
+
+        if ((self.y.size > 500000) or (self.y.size < 100)):
+            print("ERROR: invalid number of points")
+
+        pts = ''
+        for i in range(self.y.size):
+            pts += '{:.5f}'.format(self.y[i]) + ":"
+        pts = pts[:-1]
+        self.waveform_gen(pts)
+
+    def sinusoidal(self, amp, offset, freq , ncycle, theta):
+        sen = lambda t: (amp*np.sin(2*np.pi*freq*t + theta/360*2*np.pi) +
+                                 offset)
         totalPoints = int(ncycle * 100000 / freq)
         self.x = np.linspace(0, ncycle/freq, totalPoints)
         self.y = sen(self.x)
